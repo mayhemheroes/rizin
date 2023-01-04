@@ -92,4 +92,4 @@ ENV HOME /home/rizin
 COPY --from=0 /tmp/rizin-install/ /
 COPY --from=0 /fuzz /fuzz_rz_asm_token_string_new
 
-RUN rz-pm init && rz-pm update
+#RUN rz-pm init && rz-pm update
