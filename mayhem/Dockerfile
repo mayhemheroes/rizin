@@ -34,23 +34,21 @@ FROM debian:10
 
 # rz-pipe python version
 ARG RZ_PIPE_PY_VERSION=master
-# rz-ghidra version
-ARG RZ_GHIDRA_VERSION=dev
 
 ARG with_arm32_as
 ARG with_arm64_as
 ARG with_ppc_as
 
 ENV RZ_PIPE_PY_VERSION ${RZ_PIPE_PY_VERSION}
-ENV RZ_GHIDRA_VERSION ${RZ_GHIDRA_VERSION}
 
 RUN echo -e "Building versions:\n\
-	RZ_PIPE_PY_VERSION=${RZ_PIPE_PY_VERSION}\
-	RZ_GHIDRA_VERSION=${RZ_GHIDRA_VERSION}"
+	RZ_PIPE_PY_VERSION=${RZ_PIPE_PY_VERSION}"
+
+# Build rizin in a volume to minimize space used by build
+COPY . /tmp/rizin/
 
 RUN apt-get update
 RUN apt-get install -y --no-install-recommends \
-	ninja-build \
 	cmake \
 	gcc \
 	cpp \
@@ -64,39 +62,34 @@ RUN apt-get install -y --no-install-recommends \
 	python3-wheel \
 	${with_arm64_as:+binutils-aarch64-linux-gnu} \
 	${with_arm32_as:+binutils-arm-linux-gnueabi} \
-	${with_ppc_as:+binutils-powerpc64le-linux-gnu}
+	${with_ppc_as:+binutils-powerpc64le-linux-gnu} \
+	clang-13
 
-RUN pip3 install meson
-
-# Build rizin in a volume to minimize space used by build
-COPY . /tmp/rizin/
-
-WORKDIR /tmp/rizin
-RUN meson --prefix=/usr -Dinstall_sigdb=true /tmp/build && \
-	meson compile -C /tmp/build && \
-	meson install --destdir /tmp/rizin-install -C /tmp/build
+RUN pip3 install -I 'meson==0.61.5' 'ninja==1.10.2.4'
 
 WORKDIR /tmp
 RUN git clone -b "$RZ_PIPE_PY_VERSION" https://github.com/rizinorg/rz-pipe
 RUN pip3 install --root=/tmp/rizin-install ./rz-pipe/python
 
-WORKDIR /tmp
-RUN git clone --recurse-submodules -b "$RZ_GHIDRA_VERSION" https://github.com/rizinorg/rz-ghidra
-WORKDIR /tmp/rz-ghidra
-RUN cmake -DCMAKE_PREFIX_PATH=/tmp/rizin-install/usr -DCMAKE_INSTALL_PREFIX=/usr -B build && cmake --build build && DESTDIR=/tmp/rizin-install cmake --build build --target install
+WORKDIR /tmp/rizin
+RUN meson --prefix=/usr /tmp/build
+RUN meson compile -C /tmp/build
+RUN meson install --destdir /tmp/rizin-install -C /tmp/build
+ENV PKG_CONFIG_PATH=/tmp/rizin-install/usr/lib/pkgconfig/
+ENV LD_LIBRARY_PATH=/tmp/rizin-install/usr/lib/
+RUN clang++-13 /tmp/rizin/mayhem/fuzz_rz_asm_token_string_new.cpp -fsanitize=fuzzer,address -I /tmp/rizin-install/usr/include/librz/ -I /tmp/rizin-install/usr/include/librz/sdb/ -L /tmp/rizin-install/usr/lib/ $(pkg-config --libs rz_asm) -o /fuzz
 
 FROM debian:10
 ENV RZ_ARM64_AS=${with_arm64_as:+aarch64-linux-gnu-as}
 ENV RZ_ARM32_AS=${with_arm32_as:+arm-linux-gnueabi-as}
 ENV RZ_PPC_AS=${with_ppc_as:+powerpc64le-linux-gnu-as}
 
-RUN useradd -m rizin
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates git python3
 
-USER rizin
 WORKDIR /home/rizin
 ENV HOME /home/rizin
 
 COPY --from=0 /tmp/rizin-install/ /
+COPY --from=0 /fuzz /fuzz_rz_asm_token_string_new
 
-CMD ["/bin/bash"]
+#RUN rz-pm init && rz-pm update

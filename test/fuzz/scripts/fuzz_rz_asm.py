@@ -27,7 +27,6 @@
 import json
 import os
 import re
-import sys
 from binascii import hexlify
 from concurrent.futures import ProcessPoolExecutor
 
@@ -83,15 +82,15 @@ def gen_testcase(cause, ins, inpairs, oins=""):
     inskey = cannonical(ins)
     insmkey = meta_cannonical(ins)
     insmmkey = meta_meta_cannonical(ins)
-    return {
-        "cause": cause,
-        "ins": ins,
-        "inpairs": inpairs,
-        "oins": oins,
-        "case": inskey,
-        "metacase": insmkey,
-        "metametacase": insmmkey,
-    }
+    return dict(
+        cause=cause,
+        ins=ins,
+        inpairs=inpairs,
+        oins=oins,
+        case=inskey,
+        metacase=insmkey,
+        metametacase=insmmkey,
+    )
 
 
 def check_hexpairs(orig_input_hexpairs):
@@ -179,4 +178,6 @@ def main():
 
 
 if __name__ == "__main__":
+    import sys
+
     sys.exit(main())
