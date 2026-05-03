@@ -30,7 +30,7 @@
 # $ rizin -d /bin/true
 #
 
-FROM debian:10
+FROM debian:12
 
 # rz-pipe python version
 ARG RZ_PIPE_PY_VERSION=master
@@ -79,7 +79,7 @@ ENV PKG_CONFIG_PATH=/tmp/rizin-install/usr/lib/pkgconfig/
 ENV LD_LIBRARY_PATH=/tmp/rizin-install/usr/lib/
 RUN clang++-13 /tmp/rizin/mayhem/fuzz_rz_asm_token_string_new.cpp -fsanitize=fuzzer,address -I /tmp/rizin-install/usr/include/librz/ -I /tmp/rizin-install/usr/include/librz/sdb/ -L /tmp/rizin-install/usr/lib/ $(pkg-config --libs rz_asm) -o /fuzz
 
-FROM debian:10
+FROM debian:12
 ENV RZ_ARM64_AS=${with_arm64_as:+aarch64-linux-gnu-as}
 ENV RZ_ARM32_AS=${with_arm32_as:+arm-linux-gnueabi-as}
 ENV RZ_PPC_AS=${with_ppc_as:+powerpc64le-linux-gnu-as}
