@@ -65,7 +65,7 @@ RUN apt-get install -y --no-install-recommends \
 	${with_ppc_as:+binutils-powerpc64le-linux-gnu} \
 	clang-13
 
-RUN pip3 install -I 'meson==0.61.5' 'ninja==1.10.2.4'
+RUN pip3 install --break-system-packages -I 'meson==0.61.5' 'ninja==1.10.2.4'
 
 WORKDIR /tmp
 RUN git clone -b "$RZ_PIPE_PY_VERSION" https://github.com/rizinorg/rz-pipe
