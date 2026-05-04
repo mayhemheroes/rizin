@@ -1,34 +1,4 @@
-# rizin docker
-# ========
-#
-# Requires 400MB of free disk space
-#
-# Build docker image with:
-# $ docker build -t rizin:latest .
-# To enable rz-asm plugins based on binutils, pass '--build-arg with_ARCH_as=1' to the build command.
-# Supported ARCHs are arm32, arm64, ppc. Each ARCH should be passed in a separate '--build-arg'.
-#
-# Run the docker image:
-# $ docker images
-# $ export DOCKER_IMAGE_ID=$(docker images --format '{{.ID}}' -f 'label=rizin')
-# $ docker run -ti --cap-drop=ALL rizin:latest
-#
-# Once you quit the bash session get the container id with:
-# $ docker ps -a | grep bash
-#
-# To get into that shell again just type:
-# $ docker start -ai <containedid>
-#
-# To share those images:
-# $ docker export <containerid> | xz > container.xz
-# $ xz -d < container.xz | docker import -
-#
-#
-# If you willing to debug a program within Docker, you should run it with CAP_SYS_PTRACE:
-#
-# $ docker run -it --cap-drop=ALL --cap-add=SYS_PTRACE rizin:latest
-# $ rizin -d /bin/true
-#
+# rizin docker for Mayhem fuzzing
 
 FROM debian:12
 
@@ -40,9 +10,6 @@ ARG with_arm64_as
 ARG with_ppc_as
 
 ENV RZ_PIPE_PY_VERSION ${RZ_PIPE_PY_VERSION}
-
-RUN echo -e "Building versions:\n\
-	RZ_PIPE_PY_VERSION=${RZ_PIPE_PY_VERSION}"
 
 # Build rizin in a volume to minimize space used by build
 COPY . /tmp/rizin/
@@ -60,29 +27,29 @@ RUN apt-get install -y --no-install-recommends \
 	python3-pip \
 	python3-setuptools \
 	python3-wheel \
-	${with_arm64_as:+binutils-aarch64-linux-gnu} \
-	${with_arm32_as:+binutils-arm-linux-gnueabi} \
-	${with_ppc_as:+binutils-powerpc64le-linux-gnu} \
 	clang-13
 
-RUN pip3 install --break-system-packages -I 'meson==0.61.5' 'ninja==1.10.2.4'
-
-WORKDIR /tmp
-RUN git clone -b "$RZ_PIPE_PY_VERSION" https://github.com/rizinorg/rz-pipe
-RUN pip3 install --root=/tmp/rizin-install ./rz-pipe/python
+RUN pip3 install --break-system-packages -I meson==0.61.5 ninja==1.10.2.4
 
 WORKDIR /tmp/rizin
 RUN meson --prefix=/usr /tmp/build
 RUN meson compile -C /tmp/build
 RUN meson install --destdir /tmp/rizin-install -C /tmp/build
+
 ENV PKG_CONFIG_PATH=/tmp/rizin-install/usr/lib/pkgconfig/
 ENV LD_LIBRARY_PATH=/tmp/rizin-install/usr/lib/
-RUN clang++-13 /tmp/rizin/mayhem/fuzz_rz_asm_token_string_new.cpp -fsanitize=fuzzer,address -I /tmp/rizin-install/usr/include/librz/ -I /tmp/rizin-install/usr/include/librz/sdb/ -L /tmp/rizin-install/usr/lib/ $(pkg-config --libs rz_asm) -o /fuzz
+
+RUN clang++-13 /tmp/rizin/mayhem/fuzz_rz_asm_token_string_new.cpp \
+    -fsanitize=fuzzer,address \
+    -I /tmp/rizin-install/usr/include/librz/ \
+    -I /tmp/rizin-install/usr/include/librz/sdb/ \
+    -L /tmp/rizin-install/usr/lib/ \
+    -Wl,--start-group \
+    -lrz_asm -lrz_util -lrz_crypto -lrz_io -lrz_flag -lrz_reg -lrz_type \
+    -Wl,--end-group \
+    -o /fuzz
 
 FROM debian:12
-ENV RZ_ARM64_AS=${with_arm64_as:+aarch64-linux-gnu-as}
-ENV RZ_ARM32_AS=${with_arm32_as:+arm-linux-gnueabi-as}
-ENV RZ_PPC_AS=${with_ppc_as:+powerpc64le-linux-gnu-as}
 
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates git python3
 
@@ -91,5 +58,3 @@ ENV HOME /home/rizin
 
 COPY --from=0 /tmp/rizin-install/ /
 COPY --from=0 /fuzz /fuzz_rz_asm_token_string_new
-
-#RUN rz-pm init && rz-pm update
